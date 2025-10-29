@@ -1,0 +1,16 @@
+# .github/ai-agent.yml
+enabled: true
+scan:
+  include: ['README.md', 'docs/**', 'src/**', 'package.json']
+  exclude_globs: ['node_modules/**', '.github/**', 'vendor/**', 'secrets/**']
+output:
+  create_issue: true
+  issue_title: 'AI: Generated Requirements'
+  post_on_pr: true
+model:
+  name: gpt-4o-mini
+  max_tokens: 2000
+security:
+  redact_patterns:
+    - 'AKIA[0-9A-Z]{16}'
+    - '-----BEGIN PRIVATE KEY-----'
