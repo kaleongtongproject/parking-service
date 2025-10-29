@@ -1,7 +1,7 @@
 name: AI — Generate Business Requirements
 
 on:
-  workflow_dispatch: {} # manual run from Actions UI
+  workflow_dispatch: {}
   pull_request:
     types: [opened, synchronize, reopened]
 
@@ -24,15 +24,42 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Install dependencies
-        run: npm ci
-        working-directory: .github/scripts || .
+      - name: Debug - list repo files (helpful first-run)
+        run: |
+          echo "Working directory: $(pwd)"
+          echo "Repo root listing:"
+          ls -la
+          echo ".github/scripts listing (if present):"
+          ls -la .github || true
+          ls -la .github/scripts || true
 
-      - name: Run AI Requirements generator
+      - name: Install dependencies (if package.json in .github/scripts)
+        run: |
+          if [ -f .github/scripts/package.json ]; then
+            echo "Found package.json in .github/scripts — running npm ci there"
+            cd .github/scripts
+            npm ci
+          elif [ -f package.json ]; then
+            echo "Found package.json in repo root — running npm ci"
+            npm ci
+          else
+            echo "No package.json found; skipping npm install"
+          fi
+
+      - name: Run AI Requirements generator script
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.number || '' }}
           IGNORE_GLOBS: 'node_modules/**,.github/**,vendor/**,secrets/**'
-        run: node .github/scripts/generate_reqs.js
+        run: |
+          # ensure the script exists
+          if [ ! -f .github/scripts/generate_reqs.js ]; then
+            echo "Error: .github/scripts/generate_reqs.js not found"
+            echo "Files under .github/scripts:"
+            ls -la .github/scripts || true
+            exit 1
+          fi
+          # run the script by path (no working-directory trick)
+          node .github/scripts/generate_reqs.js
