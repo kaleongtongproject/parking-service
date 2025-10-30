@@ -1,17 +1,7 @@
-/**
- * .github/scripts/generate_reqs.js
- * Minimal script to:
- * - gather a few repo files (README, docs, package.json, small src samples)
- * - call OpenAI Responses API (ChatGPT) to generate business requirements -> REQS.md content
- * - create an Issue "AI: Generated Requirements" (or comment on PR)
- *
- * Note: This script is intentionally simple. For large repos: chunk files, redact secrets,
- * and avoid sending huge files.
- */
-
-import fs from 'fs';
-import path from 'path';
-import fetch from 'node-fetch';
+// .github/scripts/generate_reqs.js
+// CommonJS version for Node 18 (works in GitHub Actions runner).
+const fs = require('fs');
+const path = require('path');
 
 const openaiKey = process.env.OPENAI_API_KEY;
 const githubToken = process.env.GITHUB_TOKEN;
@@ -59,7 +49,7 @@ if (fs.existsSync(srcDir) && fs.statSync(srcDir).isDirectory()) {
   }
 }
 
-// Build a clean context summary to keep prompt short
+// Build context text
 let contextText = '';
 for (const f of files) {
   contextText += `--- FILE: ${f.name} ---\n${f.content}\n\n`;
@@ -68,7 +58,7 @@ if (!contextText)
   contextText =
     'REPO ROOT: No README/docs/src files found (or they were too large). Please run on a repo with README or docs.';
 
-// Prompt template (business requirements focused)
+// Prompt template
 const prompt = `
 You are a senior product manager and software architect with domain-agnostic expertise.
 Given the repository context below, produce a comprehensive but concise "Business Requirements" document (in markdown) suitable to drop into REQS.md.
@@ -105,7 +95,7 @@ Rules:
 - Do NOT output any secrets. If you detect obvious secret patterns, call them out as "POTENTIAL SECRET" with file path.
 `;
 
-// Call OpenAI Responses API (v1/responses)
+// Use global fetch (Node 18+)
 async function callOpenAI(promptText) {
   const resp = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
@@ -114,27 +104,17 @@ async function callOpenAI(promptText) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini', // choose a cost/quality appropriate model; change if needed
+      model: 'gpt-4o-mini',
       input: promptText,
       max_output_tokens: 2000,
     }),
   });
-  const body = await resp.json();
-  // best-effort to get text
-  const output =
-    (body.output &&
-      body.output.length &&
-      body.output[0].content &&
-      body.output[0].content.map((c) => c.text || '').join('')) ||
-    JSON.stringify(body);
-  return output;
+  return await resp.json();
 }
 
-// Post to GitHub: create issue or comment on PR
 async function postToGitHub(title, bodyText) {
   const apiBase = 'https://api.github.com';
   if (prNumber) {
-    // Post as PR comment
     const url = `${apiBase}/repos/${repo}/issues/${prNumber}/comments`;
     const res = await fetch(url, {
       method: 'POST',
@@ -149,7 +129,6 @@ async function postToGitHub(title, bodyText) {
     });
     return res.ok;
   } else {
-    // Create an Issue titled "AI: Generated Requirements"
     const url = `${apiBase}/repos/${repo}/issues`;
     const res = await fetch(url, {
       method: 'POST',
@@ -167,11 +146,27 @@ async function postToGitHub(title, bodyText) {
   }
 }
 
-// main
 (async () => {
   try {
     console.log('Calling OpenAI with repo context...');
-    const aiOutput = await callOpenAI(prompt);
+    const response = await callOpenAI(prompt);
+    // best-effort extract text (Responses API format may vary)
+    let aiOutput = '';
+    if (response && Array.isArray(response.output) && response.output.length) {
+      aiOutput = response.output
+        .map((o) => {
+          if (o.content && Array.isArray(o.content)) {
+            return o.content.map((c) => c.text || '').join('');
+          }
+          return o.text || '';
+        })
+        .join('\n');
+    } else if (response && response.output_text) {
+      aiOutput = response.output_text;
+    } else {
+      aiOutput = JSON.stringify(response);
+    }
+
     console.log('AI response length:', aiOutput.length);
     const created = await postToGitHub('AI: Generated Requirements', aiOutput);
     if (created) {
