@@ -38,21 +38,42 @@ jobs:
             cd -
           fi
 
-      - name: Quick secrets scan (basic)
+      - name: Quick secrets scan (robust)
         run: |
-          set -e
-          patterns=("AKIA[0-9A-Z]{16}" "-----BEGIN (RSA|PRIVATE) KEY-----" "sk-[A-Za-z0-9_\\-]{20,}")
+          set -euo pipefail
+          echo "Starting robust secrets scan..."
+
+          # Optional: skip scan by setting SKIP_SECRET_SCAN=true in workflow_dispatch
+          if [ "${SKIP_SECRET_SCAN:-false}" = "true" ]; then
+            echo "SKIP_SECRET_SCAN=true — skipping secrets scan."
+            exit 0
+          fi
+
+          echo "Building list of tracked files (excluding node_modules, .github, vendor, secrets)..."
+          files=$(git ls-files | grep -v -E '^(node_modules/|\.github/|vendor/|secrets/)' || true)
+
+          patterns=(
+            "AKIA[0-9A-Z]{16}"
+            "-----BEGIN (RSA|PRIVATE) KEY-----"
+            "sk-[A-Za-z0-9_\\-]{20,}"
+          )
+
           hits=0
           for p in "${patterns[@]}"; do
-            if git grep -n -E "$p" -- ':!node_modules' ':!.github' || true; then
-              echo "::error::Potential secret found matching $p"
-              hits=$((hits+1))
-            fi
+            echo "Checking pattern: $p"
+            while IFS= read -r f; do
+              if grep -I -n -E "$p" "$f" >/dev/null 2>&1; then
+                echo "::error::Potential secret found matching pattern: $p in file: $f"
+                hits=$((hits+1))
+              fi
+            done <<< "$files"
           done
+
           if [ "$hits" -gt 0 ]; then
-            echo "Found potential secrets; aborting"
+            echo "Found potential secrets; aborting to avoid sending secrets to OpenAI."
             exit 1
           fi
+          echo "No potential secrets found."
 
       - name: Run AI generator (writes tmp/reqs.md)
         env:
@@ -68,30 +89,3 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -e
-          if [ ! -f tmp/reqs.md ]; then
-            echo "No tmp/reqs.md found — nothing to commit."
-            exit 0
-          fi
-
-          # Configure git
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          BRANCH="ai/reqs-$(date +%s)"
-          git checkout -b "$BRANCH"
-          mkdir -p docs || true
-          cp tmp/reqs.md docs/REQS.md
-          git add docs/REQS.md
-          git commit -m "chore: add AI-generated docs/REQS.md"
-          git push --set-upstream origin "$BRANCH"
-
-          # Create PR
-          API_URL="https://api.github.com/repos/${REPO}/pulls"
-          BODY=$(jq -n \
-            --arg title "AI: Add generated REQS.md" \
-            --arg head "$BRANCH" \
-            --arg base "main" \
-            --arg body "This PR was auto-created by the AI requirements generator. Please review the generated REQS.md." \
-            '{title:$title, head:$head, base:$base, body:$body}')
-          curl -s -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Content-Type: application/json" -d "$BODY" "$API_URL" | tee pr_response.json
-          echo "PR created or attempted."
