@@ -1,0 +1,45 @@
+name: AI — Check PR against REQS
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  check_pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Debug - list files (optional)
+        run: |
+          echo "Repo root: $(pwd)"
+          echo "Listing .github and scripts:"
+          ls -la .github || true
+          ls -la .github/scripts || true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Run PR vs REQS check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.number }}
+          DEFAULT_BRANCH: master
+        run: |
+          if [ ! -f .github/scripts/check_pr_against_reqs.js ]; then
+            echo "Error: .github/scripts/check_pr_against_reqs.js not found"
+            echo "Make sure the script exists at .github/scripts/check_pr_against_reqs.js"
+            exit 1
+          fi
+          node .github/scripts/check_pr_against_reqs.js

@@ -1,0 +1,97 @@
+name: AI — Generate REQS.md and open PR
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  generate_and_pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Debug - list files
+        run: |
+          echo "Repo root: $(pwd)"
+          ls -la
+
+      - name: Install deps if needed
+        run: |
+          if [ -f .github/scripts/package.json ]; then
+            cd .github/scripts
+            npm ci
+            cd -
+          fi
+
+      - name: Quick secrets scan (basic)
+        run: |
+          set -e
+          patterns=("AKIA[0-9A-Z]{16}" "-----BEGIN (RSA|PRIVATE) KEY-----" "sk-[A-Za-z0-9_\\-]{20,}")
+          hits=0
+          for p in "${patterns[@]}"; do
+            if git grep -n -E "$p" -- ':!node_modules' ':!.github' || true; then
+              echo "::error::Potential secret found matching $p"
+              hits=$((hits+1))
+            fi
+          done
+          if [ "$hits" -gt 0 ]; then
+            echo "Found potential secrets; aborting"
+            exit 1
+          fi
+
+      - name: Run AI generator (writes tmp/reqs.md)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          node .github/scripts/generate_reqs_commit.js
+
+      - name: Create branch, commit REQS.md and open PR (if generated)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          if [ ! -f tmp/reqs.md ]; then
+            echo "No tmp/reqs.md found — nothing to commit."
+            exit 0
+          fi
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          BRANCH="ai/reqs-$(date +%s)"
+          git checkout -b "$BRANCH"
+          mkdir -p docs || true
+          cp tmp/reqs.md docs/REQS.md
+          git add docs/REQS.md
+          git commit -m "chore: add AI-generated docs/REQS.md"
+          git push --set-upstream origin "$BRANCH"
+
+          # Create PR
+          API_URL="https://api.github.com/repos/${REPO}/pulls"
+          BODY=$(jq -n \
+            --arg title "AI: Add generated REQS.md" \
+            --arg head "$BRANCH" \
+            --arg base "main" \
+            --arg body "This PR was auto-created by the AI requirements generator. Please review the generated REQS.md." \
+            '{title:$title, head:$head, base:$base, body:$body}')
+          curl -s -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Content-Type: application/json" -d "$BODY" "$API_URL" | tee pr_response.json
+          echo "PR created or attempted."
