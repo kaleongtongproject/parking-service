@@ -1,0 +1,59 @@
+-- FLYWAY TEST MIGRATION
+CREATE TABLE flyway_check (
+  id SERIAL PRIMARY KEY,
+  msg TEXT
+);
+
+-- Enable PostGIS extension
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+-- Property table
+CREATE TABLE property (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    address TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Inspection Area
+CREATE TABLE inspection_area (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    property_id UUID NOT NULL REFERENCES property(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    geometry GEOMETRY(POLYGON, 4326) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Flight
+CREATE TABLE flight (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    inspection_area_id UUID NOT NULL REFERENCES inspection_area(id) ON DELETE CASCADE,
+    flight_date TIMESTAMP NOT NULL,
+    drone_operator VARCHAR(255),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Media
+CREATE TABLE media (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    flight_id UUID NOT NULL REFERENCES flight(id) ON DELETE CASCADE,
+    url TEXT NOT NULL,
+    type VARCHAR(50) CHECK (type IN ('image', 'video')),
+    captured_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Task
+CREATE TABLE task (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    property_id UUID NOT NULL REFERENCES property(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    status VARCHAR(50) CHECK (status IN ('pending', 'in_progress', 'completed')) DEFAULT 'pending',
+    due_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
