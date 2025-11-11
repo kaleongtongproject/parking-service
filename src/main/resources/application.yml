@@ -14,3 +14,6 @@ spring:
 logging:
   level:
     org.flywaydb.core: DEBUG
+parking:
+  default-capacity: 50
+  reservation-expiry-minutes: 15

@@ -3,11 +3,11 @@ version: '3.8'
 services:
   postgres:
     image: postgis/postgis:15-3.3
-    container_name: facilityscope_db
+    container_name: parkingservice_db
     ports:
       - '5432:5432'
     environment:
-      POSTGRES_DB: facilityscope
+      POSTGRES_DB: parkingservice
       POSTGRES_USER: fs_user
       POSTGRES_PASSWORD: fs_password
     volumes:
@@ -16,7 +16,7 @@ services:
   app:
     build:
       context: .
-    container_name: facilityscope_app
+    container_name: parkingservice_app
     depends_on:
       - postgres
     ports:
