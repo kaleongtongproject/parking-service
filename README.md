@@ -1,87 +1,323 @@
-# 🏗️ Facility Scope Backend
+🚗 Parking Service — High-Performance, Resilient, and Scalable Parking Lot System
 
-A Spring Boot backend application with PostgreSQL and Flyway support, containerized using Docker.
+A production-ready parking lot backend service built with Java, Spring Boot, and Redis.
+Designed to support 500+ requests per second, real-time spot management, high availability, and enterprise-level profitability features such as billing, analytics, and dynamic pricing.
 
----
+This README documents the system architecture, requirements, features, and roadmap for evolving this project into a full enterprise solution.
 
-## 🧠 Project Purpose
+📘 Table of Contents
 
-This system manages drone flight inspections for facilities. It allows operators to schedule, track, and audit inspection flights over property areas — while also recording detailed status history and calculating cost per flight.
+Overview
 
-> ✅ Business Insight: This backend also supports **flight cost estimation** to help reduce operational expenses and improve inspection efficiency.
+Core Features
 
----
+System Requirements
 
-## 🧮 Flight Cost Calculation
+Architecture
 
-The cost of each drone flight is estimated using business logic based on your data model:
+Technical Design
 
-| Factor                   | Description                            | Logic                                         |
-| ------------------------ | -------------------------------------- | --------------------------------------------- |
-| **Flight Duration**      | Time from `IN_PROGRESS` to `COMPLETED` | `duration_minutes * cost_per_minute`          |
-| **Rescheduling**         | Extra times flight was rescheduled     | `($reschedules - 1) * penalty_per_reschedule` |
-| **Inspection Area Size** | Calculated from polygon area (PostGIS) | `area_m2 * cost_per_sq_meter`                 |
-| **Property Location**    | Urban, Rural, or Restricted            | Multiplier to total cost                      |
-| **Base Rate**            | Flat rate per flight                   | `$50.00` (modifiable constant)                |
+Scalability & High Availability
 
-### ✅ Example Calculation
+Security & Compliance
 
-A flight with the following characteristics:
+Monitoring & Observability
 
-- 45 minutes in the air
-- 2 total `SCHEDULED` statuses (1 reschedule)
-- 5,000 m² inspection area
-- Urban property
+Testing Strategy
 
-**Cost =**  
-`$50 + (45 * $0.75) + (1 * $15) + (5000 * $0.01)` → then multiply by `1.2` (urban location multiplier)  
-🧾 **Total: ~$185.40**
+Corporate Feature Roadmap
 
-An endpoint like `GET /flights/{id}/cost` can expose this calculation.
+Local Development
 
----
+API Endpoints
 
-## 🐳 Running the App with Docker
+📌 Overview
 
-This project uses Docker Compose to spin up two services:
+This service manages real-time parking capacity for one or more parking lots and ensures:
 
-- **PostgreSQL** database (`postgres`)
-- **Spring Boot** application (`facilityscope_app`)
+Atomic check-in/check-out operations
 
----
+Resilience to high concurrency
 
-## ⚙️ Prerequisites
+Consistency even under extreme load
 
-- Docker
-- Docker Compose
-- Java 17+
-- Maven
+Low latency (<5 ms Redis operations)
 
----
+The service uses Redis Lua scripts to achieve safe distributed counters at 500+ RPS.
 
-## 🚀 Step-by-Step Setup
+🚀 Core Features
+✔️ Real-Time Spot Management
 
-### 1. 🧼 Clean and Build the JAR
+Atomic check-in (decrement spot count)
 
-From the project root:
+Atomic check-out (increment spot count)
 
-```bash
-./mvnw clean package -DskipTests
-docker compose down -v --remove-orphans
-docker compose up --build -d
-```
+Redis-backed availability tracking
 
-## 🔄 Run Flyway Migration to Populate Database Tables
+✔️ High Performance
 
-docker run --rm --network=facility-scope_default \
- -v ${PWD}/src/main/resources/db/migration:/flyway/sql \
- flyway/flyway:9.22.3 \
- -url=jdbc:postgresql://postgres:5432/facilityscope \
- -user=fs_user -password=fs_password migrate
+Designed for >500 RPS
 
-📌 Future Enhancements
-🔍 Predictive Insights: Use past flights and inspection results to predict area deterioration.
+Uses Redis Lua scripting to prevent race conditions
 
-🧠 AI/ML Integration: Start simple (e.g., flag areas with >X inspections in Y days) and later use ML models.
+✔️ REST API
 
-🖼️ Image Analysis: Integrate drone-captured imagery for anomaly detection.
+/parking/in
+
+/parking/out
+
+/parking/status
+
+✔️ Production-level Requirements (expandable)
+
+Billing & pricing
+
+Reservations
+
+Dynamic pricing
+
+Payment integration
+
+Analytics & dashboards
+
+Event-driven architecture
+
+🧩 System Requirements
+Functional Requirements
+
+Users can check in (park) if a spot is available.
+
+Users can check out (leave), freeing a spot.
+
+System must calculate remaining availability in real time.
+
+Admins can configure:
+
+Maximum capacity
+
+Pricing rules
+
+Parking zones
+
+Non-Functional Requirements
+Category Requirements
+Performance Handle 500+ RPS for check-ins/outs
+Availability 99.9% uptime, multi-node deployment
+Latency Redis operations < 5 ms
+Consistency No overselling spots (atomic Lua scripts)
+Security OAuth2/JWT, RBAC, rate limiting
+Scalability Horizontal scaling of application & Redis
+🏗️ Architecture
+┌────────────────────┐ ┌─────────────────────┐
+│ Client / Mobile │ ---> │ API Gateway │
+└────────────────────┘ └─────────────────────┘
+│ │
+▼ ▼
+┌──────────────────────────────────────────┐
+│ Parking Service (Spring) │
+└──────────────────────────────────────────┘
+│ │
+▼ ▼
+┌─────────────────┐ ┌─────────────────────┐
+│ Redis (Primary) │ │ Redis (Replica) │
+└─────────────────┘ └─────────────────────┘
+│
+▼
+┌───────────────────────┐
+│ Long-term Storage │ (Optional: events)
+│ Postgres / S3 / Kafka │
+└───────────────────────┘
+
+⚙️ Technical Design
+Redis Key
+parking:available_spots -> integer
+
+Lua Script for Atomic Check-In
+
+Prevents overselling spots.
+
+local spots = tonumber(redis.call('GET', KEYS[1]))
+if not spots then return -1 end
+if spots > 0 then
+redis.call('DECR', KEYS[1])
+return 1
+else
+return 0
+end
+
+Check-Out
+
+Uses Redis INCR.
+
+📈 Scalability & High Availability
+
+1. Redis Cluster or Sentinel
+
+To avoid single-point-of-failure.
+
+2. Stateless Application Nodes
+
+Autoscaling via Kubernetes/ECS.
+
+3. API Rate Limiting
+
+Protects against abuse.
+
+4. Caching Layers
+
+Redis handles real-time spot data with O(1) operations.
+
+5. Event-driven Logging
+
+Every parking event emitted to Kafka → used for BI dashboards.
+
+🔐 Security & Compliance
+
+OAuth2 + JWT authentication
+
+TLS everywhere
+
+Rate limiting (per IP or per user)
+
+Role-Based Access Control (RBAC)
+
+PCI DSS compliance for billing integrations
+
+GDPR/CCPA if operating user data in regulated regions
+
+📊 Monitoring & Observability
+Metrics (Prometheus)
+
+request count, success/failure
+
+Redis latency
+
+available spots
+
+peak-hour load
+
+error rate
+
+Logs (JSON structured)
+
+every check-in/out event
+
+admin configuration changes
+
+Alerts
+
+Redis unavailable
+
+occupancy anomaly
+
+high error rate
+
+latency > threshold
+
+🧪 Testing Strategy
+Unit Tests
+
+Service logic
+
+Lua script wrapper tests
+
+Integration Tests
+
+Testcontainers for Redis
+
+Concurrency tests simulating >100 requests/sec
+
+Load Testing
+
+Tools:
+
+k6
+
+JMeter
+
+Locust
+
+Scenarios:
+
+burst of 500 RPS for 60 seconds
+
+sustained load for 10 minutes
+
+failover simulation
+
+🗺️ Corporate Feature Roadmap
+Phase 1 — Stability (MVP+)
+
+High availability Redis
+
+Prometheus/Grafana monitoring
+
+Rate limiting & JWT auth
+
+Phase 2 — Revenue Features
+
+Hourly billing engine
+
+Dynamic pricing
+
+Stripe/PayPal payment integration
+
+Email/SMS receipts
+
+Phase 3 — Customer Products
+
+Reservations system
+
+Membership subscriptions
+
+Mobile app integration
+
+Phase 4 — Enterprise Platform
+
+Multi-lot management
+
+Event-driven architecture with Kafka
+
+Analytics dashboards (PowerBI, Looker)
+
+AI pricing optimizer
+
+🧑‍💻 Local Development
+Requirements
+
+JDK 17+
+
+Docker (for Redis)
+
+Maven
+
+Start Redis
+docker run -p 6379:6379 --name redis redis:7
+
+Set initial capacity
+redis-cli set parking:available_spots 30
+
+Run the app
+mvn spring-boot:run
+
+🌐 API Endpoints
+Check In
+POST /parking/in
+
+Response
+
+{ "success": true }
+
+Check Out
+POST /parking/out
+
+Response
+
+{ "success": true }
+
+Get Status
+GET /parking/status
+
+Response
+
+{ "availableSpots": 20 }
