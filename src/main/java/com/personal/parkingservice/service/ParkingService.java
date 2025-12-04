@@ -1,17 +1,24 @@
 package com.personal.parkingservice.service;
 
+import java.time.Instant;
 import java.util.Collections;
-import java.util.Objects;
+import java.util.UUID;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
+import com.personal.parkingservice.dto.StartSessionRequestDTO;
+import com.personal.parkingservice.dto.StartSessionResponseDTO;
+import com.personal.parkingservice.entity.ParkingSession;
+import com.personal.parkingservice.repository.MediaRepository;
+import com.personal.parkingservice.repository.ParkingSessionRepository;
+
 @Service
 public class ParkingService {
 
     public static final String AVAILABLE_SPOTS_KEY = "parking:available_spots";
-
+    private final ParkingSessionRepository parkingSessionRepository;
     private final StringRedisTemplate redisTemplate;
 
     // Lua script:
@@ -27,11 +34,12 @@ public class ParkingService {
 
     private final DefaultRedisScript<Long> parkInScript;
 
-    public ParkingService(StringRedisTemplate redisTemplate) {
+    public ParkingService(StringRedisTemplate redisTemplate, ParkingSessionRepository parkingSessionRepository) {
         this.redisTemplate = redisTemplate;
         this.parkInScript = new DefaultRedisScript<>();
         this.parkInScript.setScriptText(PARK_IN_LUA);
         this.parkInScript.setResultType(Long.class);
+        this.parkingSessionRepository = parkingSessionRepository;
     }
 
     /**
@@ -87,4 +95,26 @@ public class ParkingService {
     public void resetSpots(int spots) {
         redisTemplate.opsForValue().set(AVAILABLE_SPOTS_KEY, String.valueOf(spots));
     }
+
+    public StartSessionResponseDTO startSession(StartSessionRequestDTO request) {
+
+        ParkingSession session = ParkingSession.builder()
+                .id(UUID.randomUUID())
+                .userId(request.userId())
+                .spotId(request.spotId()) // can be NULL
+                .checkinTs(Instant.now())
+                .status("ONGOING")
+                .pricingVersion("v1")
+                .build();
+
+        parkingSessionRepository.save(session);
+
+        return new StartSessionResponseDTO(
+                session.getId(),
+                session.getUserId(),
+                session.getSpotId(),
+                session.getCheckinTs(),
+                session.getStatus());
+    }
+
 }

@@ -51,7 +51,6 @@ public class InspectionAreaServiceImpl implements InspectionAreaService {
 
     @Override
     public InspectionArea update(UUID id, InspectionArea updatedInspectionArea) {
-        InspectionArea existing = getById(id);
         return inspectionAreaRepository.save(updatedInspectionArea);
     }
 

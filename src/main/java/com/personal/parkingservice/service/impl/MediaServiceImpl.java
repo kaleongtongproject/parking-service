@@ -37,7 +37,6 @@ public class MediaServiceImpl implements MediaService {
 
     @Override
     public Media update(UUID id, Media updatedMedia) {
-        Media existing = getById(id);
         return mediaRepository.save(updatedMedia);
     }
 
