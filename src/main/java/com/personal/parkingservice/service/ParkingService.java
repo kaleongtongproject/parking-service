@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import com.personal.parkingservice.dto.StartSessionRequestDTO;
 import com.personal.parkingservice.dto.StartSessionResponseDTO;
 import com.personal.parkingservice.entity.ParkingSession;
-import com.personal.parkingservice.repository.MediaRepository;
 import com.personal.parkingservice.repository.ParkingSessionRepository;
 
 @Service
