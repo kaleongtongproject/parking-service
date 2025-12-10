@@ -70,20 +70,21 @@ public class ParkingController {
                                                 req.lotId(),
                                                 req.membership()));
 
-                // 5. Create payment intent
                 String idempotency = "checkout:" + (userId != null ? userId : "anon") + ":" + sessionId;
-                String clientSecret = paymentService.createPaymentIntent(
+                String paymentIntentId = paymentService.createPaymentIntent(
                                 result.totalCents(), "usd", userId, idempotency);
 
+                // ---- Immediately simulate payment success ----
+                boolean paid = paymentService.isPaymentCompleted(paymentIntentId);
                 // 6. Persist updated session
                 session.setCheckoutTs(checkoutTime);
                 session.setTotalAmountCents(result.totalCents());
-                session.setPaymentIntentId(clientSecret);
-                session.setStatus("AWAITING_PAYMENT");
+                session.setPaymentIntentId(paymentIntentId);
+                session.setStatus(paid ? "PAID" : "AWAITING_PAYMENT");
+
                 sessionRepository.save(session);
 
-                // 7. Return result
-                return ResponseEntity.ok(new CheckoutResponse(clientSecret, result));
+                return ResponseEntity.ok(new CheckoutResponse(paymentIntentId, result));
         }
 
         @PostMapping("/start")

@@ -2,27 +2,30 @@ package com.personal.parkingservice.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "reservation")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Reservation {
+public class PaymentTransaction {
+
     @Id
+    @GeneratedValue
     private UUID id;
-    private UUID userId;
-    private Long spotId;
-    private Long lotId;
-    private Instant arrivalTs;
-    private Integer expectedDurationMinutes;
-    private String status;
-    private Long priceCents;
+
+    @Column(nullable = false, unique = true)
     private String paymentIntentId;
+
+    @Column(nullable = false)
+    private UUID sessionId;
+
+    private long amountCents;
+
+    private String status;
     private Instant createdAt;
+    private Instant updatedAt;
 }

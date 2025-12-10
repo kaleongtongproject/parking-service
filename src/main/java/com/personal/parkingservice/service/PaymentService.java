@@ -3,12 +3,20 @@ package com.personal.parkingservice.service;
 import java.util.UUID;
 
 public interface PaymentService {
+
     /**
-     * Create a payment intent and return a client secret (or payment identifier).
+     * Create a payment intent and simulate a payment.
+     * Should be idempotent.
      */
     String createPaymentIntent(long amountCents, String currency, UUID userId, String idempotencyKey);
 
-    void handleWebhook(String payload);
+    /**
+     * Simulate payment success immediately (no webhook).
+     */
+    void processPayment(String paymentIntentId);
 
-    void refund(String paymentIntentId, long amountCents);
+    /**
+     * Lookup payment state.
+     */
+    boolean isPaymentCompleted(String paymentIntentId);
 }
