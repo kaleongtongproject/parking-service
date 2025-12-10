@@ -50,7 +50,7 @@ Also creates a mocked payment intent and updates the session.
   "sessionId": "uuid",
   "checkout": "2025-12-01T12:00:00Z",
   "lotId": 1,
-  "membership": "PREMIUM"
+  "membership": "PREMIUM" || "NONE
 }
 ```
 
@@ -87,11 +87,11 @@ You do **not** call this manually in the mock environment.
 
 ### 6. **Get Parking Session**
 
-**GET** `/session/{id}`
+**GET** `/api/parking/status/{licensePlate}`
 
 ### 7. **List All Sessions**
 
-**GET** `/sessions`
+**GET** `/api/parking/active`
 
 ---
 
@@ -100,10 +100,6 @@ You do **not** call this manually in the mock environment.
 ### ParkingSession
 
 Tracks each parking visit.
-
-### PaymentTransaction
-
-Created on checkout and updated when payment is (mock) completed.
 
 ### PricingRule
 
@@ -114,8 +110,6 @@ Defines dynamic pricing, discounts, and surcharges.
 ## 🧪 **Testing Notes**
 
 - Use UUIDs in standard 36-character format.
-- `/checkout` pulls check-in time _from the DB_, not the client.
-- Payment flow is mocked (no Stripe required).
 
 ---
 
@@ -123,11 +117,8 @@ Defines dynamic pricing, discounts, and surcharges.
 
 This API supports:
 
-- Starting a session
-- Checking out
+- Starting a Parking Session
 - Pricing calculation
-- Mock payment processing
 - Pricing rules
 - Session lookups
-
-Perfect for demonstrating backend engineering concepts like idempotency, persistence, services, and domain modeling.
+- Checkout a parking session
