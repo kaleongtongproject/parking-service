@@ -1,323 +1,133 @@
-🚗 Parking Service — High-Performance, Resilient, and Scalable Parking Lot System
+# Parking Service API Documentation
 
-A production-ready parking lot backend service built with Java, Spring Boot, and Redis.
-Designed to support 500+ requests per second, real-time spot management, high availability, and enterprise-level profitability features such as billing, analytics, and dynamic pricing.
+This document lists the available API endpoints for the Parking Service and explains their purpose, request structures, and example usages.
 
-This README documents the system architecture, requirements, features, and roadmap for evolving this project into a full enterprise solution.
+---
 
-📘 Table of Contents
+## 🚗 **Parking Session APIs**
 
-Overview
+### ### 1. **Start a Parking Session**
 
-Core Features
+**POST** `/api/parking/start`
 
-System Requirements
+Creates a new parking session when a vehicle arrives.
 
-Architecture
+#### Request Body
 
-Technical Design
+```json
+{
+  "userId": "UUID",
+  "licensePlate": "ABC123",
+  "spotId": 42
+}
+```
 
-Scalability & High Availability
+#### Response
 
-Security & Compliance
+```json
+{
+  "sessionId": "<sessionId>",
+  "userId": "<UUID>",
+  "spotId": 42,
+  "checkinTs": "2025-12-10T00:19:03.286707967Z",
+  "status": "ONGOING"
+}
+```
 
-Monitoring & Observability
+---
 
-Testing Strategy
+### 2. **Checkout (Calculate pricing + create payment intent)**
 
-Corporate Feature Roadmap
+**POST** `/checkout`
 
-Local Development
+Performs pricing calculation based on stored check-in timestamp and requested checkout timestamp.  
+Also creates a mocked payment intent and updates the session.
 
-API Endpoints
+#### Request Body
 
-📌 Overview
+```json
+{
+  "sessionId": "uuid",
+  "checkout": "2025-12-01T12:00:00Z",
+  "lotId": 1,
+  "membership": "PREMIUM"
+}
+```
 
-This service manages real-time parking capacity for one or more parking lots and ensures:
+#### Headers
 
-Atomic check-in/check-out operations
+`X-User-Id: <uuid>` (optional)
 
-Resilience to high concurrency
+#### Response
 
-Consistency even under extreme load
+```json
+{
+  "clientSecret": "pi_mock_1",
+  "pricing": {
+    "baseCents": 1200,
+    "surchargeCents": 0,
+    "discountCents": 0,
+    "totalCents": 1200,
+    "appliedRules": ["BASE_RATE"]
+  }
+}
+```
 
-Low latency (<5 ms Redis operations)
+---
 
-The service uses Redis Lua scripts to achieve safe distributed counters at 500+ RPS.
+### 3. **Complete Payment (Mocked Internal Workflow)**
 
-🚀 Core Features
-✔️ Real-Time Spot Management
+This happens automatically inside `/checkout` via `paymentService.handleWebhook(...)`.
 
-Atomic check-in (decrement spot count)
+You do **not** call this manually in the mock environment.
 
-Atomic check-out (increment spot count)
+---
 
-Redis-backed availability tracking
+## 🔍 **Diagnostic APIs**
 
-✔️ High Performance
+### 6. **Get Parking Session**
 
-Designed for >500 RPS
+**GET** `/session/{id}`
 
-Uses Redis Lua scripting to prevent race conditions
+### 7. **List All Sessions**
 
-✔️ REST API
+**GET** `/sessions`
 
-/parking/in
+---
 
-/parking/out
+## 🧱 **Entities Involved**
 
-/parking/status
+### ParkingSession
 
-✔️ Production-level Requirements (expandable)
+Tracks each parking visit.
 
-Billing & pricing
+### PaymentTransaction
 
-Reservations
+Created on checkout and updated when payment is (mock) completed.
 
-Dynamic pricing
+### PricingRule
 
-Payment integration
+Defines dynamic pricing, discounts, and surcharges.
 
-Analytics & dashboards
+---
 
-Event-driven architecture
+## 🧪 **Testing Notes**
 
-🧩 System Requirements
-Functional Requirements
+- Use UUIDs in standard 36-character format.
+- `/checkout` pulls check-in time _from the DB_, not the client.
+- Payment flow is mocked (no Stripe required).
 
-Users can check in (park) if a spot is available.
+---
 
-Users can check out (leave), freeing a spot.
+## ✨ Summary
 
-System must calculate remaining availability in real time.
+This API supports:
 
-Admins can configure:
+- Starting a session
+- Checking out
+- Pricing calculation
+- Mock payment processing
+- Pricing rules
+- Session lookups
 
-Maximum capacity
-
-Pricing rules
-
-Parking zones
-
-Non-Functional Requirements
-Category Requirements
-Performance Handle 500+ RPS for check-ins/outs
-Availability 99.9% uptime, multi-node deployment
-Latency Redis operations < 5 ms
-Consistency No overselling spots (atomic Lua scripts)
-Security OAuth2/JWT, RBAC, rate limiting
-Scalability Horizontal scaling of application & Redis
-🏗️ Architecture
-┌────────────────────┐ ┌─────────────────────┐
-│ Client / Mobile │ ---> │ API Gateway │
-└────────────────────┘ └─────────────────────┘
-│ │
-▼ ▼
-┌──────────────────────────────────────────┐
-│ Parking Service (Spring) │
-└──────────────────────────────────────────┘
-│ │
-▼ ▼
-┌─────────────────┐ ┌─────────────────────┐
-│ Redis (Primary) │ │ Redis (Replica) │
-└─────────────────┘ └─────────────────────┘
-│
-▼
-┌───────────────────────┐
-│ Long-term Storage │ (Optional: events)
-│ Postgres / S3 / Kafka │
-└───────────────────────┘
-
-⚙️ Technical Design
-Redis Key
-parking:available_spots -> integer
-
-Lua Script for Atomic Check-In
-
-Prevents overselling spots.
-
-local spots = tonumber(redis.call('GET', KEYS[1]))
-if not spots then return -1 end
-if spots > 0 then
-redis.call('DECR', KEYS[1])
-return 1
-else
-return 0
-end
-
-Check-Out
-
-Uses Redis INCR.
-
-📈 Scalability & High Availability
-
-1. Redis Cluster or Sentinel
-
-To avoid single-point-of-failure.
-
-2. Stateless Application Nodes
-
-Autoscaling via Kubernetes/ECS.
-
-3. API Rate Limiting
-
-Protects against abuse.
-
-4. Caching Layers
-
-Redis handles real-time spot data with O(1) operations.
-
-5. Event-driven Logging
-
-Every parking event emitted to Kafka → used for BI dashboards.
-
-🔐 Security & Compliance
-
-OAuth2 + JWT authentication
-
-TLS everywhere
-
-Rate limiting (per IP or per user)
-
-Role-Based Access Control (RBAC)
-
-PCI DSS compliance for billing integrations
-
-GDPR/CCPA if operating user data in regulated regions
-
-📊 Monitoring & Observability
-Metrics (Prometheus)
-
-request count, success/failure
-
-Redis latency
-
-available spots
-
-peak-hour load
-
-error rate
-
-Logs (JSON structured)
-
-every check-in/out event
-
-admin configuration changes
-
-Alerts
-
-Redis unavailable
-
-occupancy anomaly
-
-high error rate
-
-latency > threshold
-
-🧪 Testing Strategy
-Unit Tests
-
-Service logic
-
-Lua script wrapper tests
-
-Integration Tests
-
-Testcontainers for Redis
-
-Concurrency tests simulating >100 requests/sec
-
-Load Testing
-
-Tools:
-
-k6
-
-JMeter
-
-Locust
-
-Scenarios:
-
-burst of 500 RPS for 60 seconds
-
-sustained load for 10 minutes
-
-failover simulation
-
-🗺️ Corporate Feature Roadmap
-Phase 1 — Stability (MVP+)
-
-High availability Redis
-
-Prometheus/Grafana monitoring
-
-Rate limiting & JWT auth
-
-Phase 2 — Revenue Features
-
-Hourly billing engine
-
-Dynamic pricing
-
-Stripe/PayPal payment integration
-
-Email/SMS receipts
-
-Phase 3 — Customer Products
-
-Reservations system
-
-Membership subscriptions
-
-Mobile app integration
-
-Phase 4 — Enterprise Platform
-
-Multi-lot management
-
-Event-driven architecture with Kafka
-
-Analytics dashboards (PowerBI, Looker)
-
-AI pricing optimizer
-
-🧑‍💻 Local Development
-Requirements
-
-JDK 17+
-
-Docker (for Redis)
-
-Maven
-
-Start Redis
-docker run -p 6379:6379 --name redis redis:7
-
-Set initial capacity
-redis-cli set parking:available_spots 30
-
-Run the app
-mvn spring-boot:run
-
-🌐 API Endpoints
-Check In
-POST /parking/in
-
-Response
-
-{ "success": true }
-
-Check Out
-POST /parking/out
-
-Response
-
-{ "success": true }
-
-Get Status
-GET /parking/status
-
-Response
-
-{ "availableSpots": 20 }
+Perfect for demonstrating backend engineering concepts like idempotency, persistence, services, and domain modeling.

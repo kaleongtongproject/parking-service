@@ -107,7 +107,7 @@ public class ParkingController {
          */
         @GetMapping("/active")
         public ResponseEntity<List<ParkingSession>> getActiveSessions() {
-                List<ParkingSession> active = sessionRepository.findAllByStatus("AWAITING_PAYMENT");
+                List<ParkingSession> active = sessionRepository.findAllByStatus("ONGOING");
                 return ResponseEntity.ok(active);
         }
 
